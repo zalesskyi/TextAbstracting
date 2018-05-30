@@ -3,9 +3,9 @@ package com.github.zalesskyi;
 import com.github.zalesskyi.base.summarization.Dictionary;
 import com.github.zalesskyi.base.summarization.FullText;
 import com.github.zalesskyi.base.summarization.Word;
+import com.sun.net.httpserver.HttpExchange;
 
 import java.io.*;
-import java.net.Socket;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -17,26 +17,21 @@ import java.util.Set;
  */
 public class ProcessThread implements Runnable {
 
-    private ByteArrayOutputStream mByteArrayStream;
-    private InputStream mReader;
-    private PrintWriter mWriter;
-    private Socket mSocket;
-
+    private String mSource;
     private Thread mThread;
+    private HttpExchange mHttpExchange;
 
-    public ProcessThread(Socket socket) throws IOException {
-        mSocket = socket;
-        mReader = mSocket.getInputStream();
-        mWriter = new PrintWriter(socket.getOutputStream(), true);
+    public ProcessThread(String source, HttpExchange httpExchange) throws IOException {
+        mSource = source;
+        mHttpExchange = httpExchange;
 
         mThread = new Thread(this);
-        Utils.log("New connection: " + socket.getInetAddress());
         mThread.start();
     }
 
     @Override
     public void run() {
-        FullText fText = new FullText(prepareData(getData()));
+        FullText fText = new FullText(prepareData(mSource));
         Dictionary dictionary = fText.getAllWords();
         Utils.log(Integer.toString(dictionary.size()));
         dictionary.compression();
@@ -54,61 +49,44 @@ public class ProcessThread implements Runnable {
         String keySentences = fText.getKeySentences(keySentencesAddr);
         Utils.log(keySentences);
         Utils.log(Integer.toString(keySentences.length()));
+
         sendData(keySentences);
+
         closeConnection();
     }
 
-    /**
-     * Получение данных от клиента.
-     * @return данные от клиента.
-     */
-    private byte[] getData() {
-        byte[] buf = new byte[1024];
-        int bytesRead;
-        mByteArrayStream = new ByteArrayOutputStream();
-        try {
-            while ((bytesRead = mReader.read(buf)) > 0) {
-                mByteArrayStream.write(buf, 0, bytesRead);
-            }
-            return mByteArrayStream.toByteArray();
-        } catch (IOException exc) {
-            exc.printStackTrace();
-            Utils.log("Error: " + exc.getMessage());
-        }
-        return null;
-    }
 
     /**
      * Подготовка данных, принятых от клиента.
-     * @param data данные от клиента
+     * @param text данные от клиента
      * @return читаемая обработчиком строка,
      * которую можно реферировать. (Абзацы отделены друг от друга метасимволами)
      */
-    private String prepareData(byte[] data) {
-        String text = new String(data);
+    private String prepareData(String text) {
         return text.replaceAll("\\. ?\n", Utils.Constants.NEW_PARAGRAPH_MARKER_REGEX);
     }
 
     /**
      * Отправка данных клиенту.
      *
-     * @param data данные, которые необходимо отправить.
+     * @param result Результат реферирования.
      */
-    private void sendData(String data) {
-        mWriter.println(data);
-    }
-
-    /**
-     * Закрытие соединения с текущим клиентом.
-     */
-    private void closeConnection() {
-        try {
-            mSocket.close();
-            mReader.close();
-            mWriter.close();
-            Utils.log("The connection with " + mSocket.getInetAddress() + " has been disconnected");
+    private void sendData(String result) {
+        try (BufferedOutputStream out = new BufferedOutputStream(mHttpExchange.getResponseBody())) {
+            try (ByteArrayInputStream bis = new ByteArrayInputStream(result.getBytes())) {
+                mHttpExchange.sendResponseHeaders(Utils.Constants.HTTP_OK, 0);
+                byte [] buffer = new byte [1024];
+                int count ;
+                while ((count = bis.read(buffer)) != -1) {
+                    out.write(buffer, 0, count);
+                }
+            }
         } catch (IOException exc) {
             exc.printStackTrace();
         }
+    }
+
+    private void closeConnection() {
+        mHttpExchange.close();
     }
 }

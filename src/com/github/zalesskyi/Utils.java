@@ -13,6 +13,9 @@ public class Utils {
         public static final String NEW_PARAGRAPH_MARKER = "$_$_$";
 
         public static final String LOG_FILE_NAME = "D://textAbstact_logs.txt";
+
+        public static final int PORT = 8080;
+        public static final int HTTP_OK = 200;
     }
 
     private static FileOutputStream logStream;

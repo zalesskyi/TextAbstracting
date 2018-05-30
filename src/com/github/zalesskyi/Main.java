@@ -1,28 +1,21 @@
 package com.github.zalesskyi;
 
-import com.github.zalesskyi.base.summarization.Dictionary;
-import com.github.zalesskyi.base.summarization.FullText;
-import com.github.zalesskyi.base.summarization.Word;
+import com.sun.net.httpserver.HttpServer;
 
-import java.io.File;
 import java.io.IOException;
-import java.net.ServerSocket;
-import java.net.Socket;
-import java.util.List;
-import java.util.Map;
-import java.util.Scanner;
-import java.util.Set;
+import java.net.InetSocketAddress;
 
 
 public class Main {
     public static void main(String[] args) {
         try {
-            ServerSocket serverSocket = new ServerSocket(8080);
-            while (true) {
-                new ProcessThread(serverSocket.accept());
-            }
+            HttpServer server = HttpServer.create(new InetSocketAddress(Utils.Constants.PORT), 0);
+            Utils.log("Server started at port: " + Utils.Constants.PORT);
+            server.createContext("/getAbstract", new GetAbstractHttpHandler());
+            server.setExecutor(null);
+            server.start();
         } catch (IOException exc) {
-            exc.printStackTrace();
+            Utils.errLog(exc.getMessage());
         }
     }
 }
